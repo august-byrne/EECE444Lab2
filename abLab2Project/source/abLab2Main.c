@@ -35,23 +35,25 @@
 * Allocate task control blocks
 *****************************************************************************************/
 static OS_TCB AppTaskStartTCB;
-static OS_TCB AppTask1TCB;
-static OS_TCB AppTask2TCB;
+static OS_TCB AppTimerDisplayTaskTCB;
+static OS_TCB AppTimerControlTaskTCB;
 
 /*****************************************************************************************
 * Allocate task stack space.
 *****************************************************************************************/
 static CPU_STK AppTaskStartStk[APP_CFG_TASK_START_STK_SIZE];
-static CPU_STK AppTask1Stk[APP_CFG_TASK1_STK_SIZE];
-static CPU_STK AppTask2Stk[APP_CFG_TASK2_STK_SIZE];
+static CPU_STK AppTimerDisplayTaskStk[APP_CFG_TASK1_STK_SIZE];
+static CPU_STK AppTimerControlTaskStk[APP_CFG_TASK2_STK_SIZE];
 
 /*****************************************************************************************
 * Task Function Prototypes. 
 *   - Private if in the same module as startup task. Otherwise public.
 *****************************************************************************************/
-static void  AppStartTask(void *p_arg);
-static void  AppTask1(void *p_arg);
-static void  AppTask2(void *p_arg);
+static void AppStartTask(void *p_arg);
+static void AppTimerDisplayTask(void *p_arg);
+static void AppTimerControlTask(void *p_arg);
+//static void  AppTask1(void *p_arg);
+//static void  AppTask2(void *p_arg);
 typedef enum {CTRL_COUNT,CTRL_WAIT,CTRL_CLEAR} CNTR_CTRL_STATE;
 
 /*****************************************************************************************
@@ -116,14 +118,12 @@ static void AppStartTask(void *p_arg) {
 	LcdDispByte(LCD_ROW_2,LCD_COL_3,LCD_LAYER_CHKSM,(INT8U)(math_val << 8));	//display first byte on LCD column 1 then <<8 and display on column 3
 	//LcdCursor(1,1,null,null,null);
 
-
-
-    OSTaskCreate(&AppTask1TCB,                  /* Create Task 1                    */
-                "App Task1 ",
-                AppTask1,
+    OSTaskCreate(&AppTimerDisplayTaskTCB,                  /* Create Task 1                    */
+                "AppTimerDisplayTask ",
+				AppTimerDisplayTask,
                 (void *) 0,
                 APP_CFG_TASK1_PRIO,
-                &AppTask1Stk[0],
+                &AppTimerDisplayTaskStk[0],
                 (APP_CFG_TASK1_STK_SIZE / 10u),
                 APP_CFG_TASK1_STK_SIZE,
                 0,
@@ -132,12 +132,12 @@ static void AppStartTask(void *p_arg) {
                 (OS_OPT_TASK_NONE),
                 &os_err);
 
-    OSTaskCreate(&AppTask2TCB,    /* Create Task 2                    */
-                "App Task2 ",
-                AppTask2,
+    OSTaskCreate(&AppTimerControlTaskTCB,    /* Create Task 2                    */
+                "AppTimerControlTask ",
+				AppTimerControlTask,
                 (void *) 0,
                 APP_CFG_TASK2_PRIO,
-                &AppTask2Stk[0],
+                &AppTimerControlTaskStk[0],
                 (APP_CFG_TASK2_STK_SIZE / 10u),
                 APP_CFG_TASK2_STK_SIZE,
                 0,
@@ -149,13 +149,31 @@ static void AppStartTask(void *p_arg) {
     OSTaskDel((OS_TCB *)0, &os_err);
 }
 
-static void appTimerDisplayTask(void *p_arg){
+static void AppTimerDisplayTask(void *p_arg){
+	OS_ERR os_err;
+	INT8U *ptr_disp_time;
+	INT8U min;
+	INT8U sec;
+	INT8U milisec;
+
+	(void)*p_arg;
+	while(1){
+		ptr_disp_time = SWCountPend(0,&os_err);
+		min = (ptr_disp_time/1000)/60;
+		sec = (ptr_disp_time/1000)%60;
+		milisec = (INT8U) ptr_disp_time;
+		LcdDispByte(LCD_ROW_1,LCD_COL_1,LCD_LAYER_TIMER,min);
+		LcdDispString(LCD_ROW_2,LCD_COL_2,LCD_LAYER_TIMER,":");
+		LcdDispByte(LCD_ROW_2,LCD_COL_3,LCD_LAYER_TIMER,sec);
+		LcdDispString(LCD_ROW_2,LCD_COL_4,LCD_LAYER_TIMER,":");
+		LcdDispByte(LCD_ROW_2,LCD_COL_5,LCD_LAYER_TIMER,milisec);
+	}
 
 
 
 }
 
-static void appTimerControlTask(void *p_arg){
+static void AppTimerControlTask(void *p_arg){
 
 	OS_ERR os_err;
 	INT8U kchar;

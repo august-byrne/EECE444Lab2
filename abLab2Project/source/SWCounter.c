@@ -34,6 +34,13 @@ INT32U SWCountPend(INT16U tout, OS_ERR *os_err);
 void SWCounterCntrlSet(INT8U enable, INT8U reset);
 void SWCounterSet(CNTR_CTRL_STATE CntrCtrlState);
 CNTR_CTRL_STATE SWCounterGet(void);
+
+typedef struct {
+	INT8U count[8];
+	OS_SEM flag;
+} SW_COUNT_BUFFER;
+static SW_COUNT_BUFFER SWCountBuffer;
+
 static CNTR_CTRL_STATE SWCntrCtrl;
 typedef enum {CTRL_COUNT,CTRL_WAIT,CTRL_CLEAR} CNTR_CTRL_STATE;
 OS_MUTEX SWCntrCtrlKey;
@@ -50,14 +57,16 @@ void SWCounterInit(void){
 
 	SWCounterSet(CTRL_WAIT);
 	OSMutexCreate(&SWCntrCtrlKey, "Counter Control Key", &os_err);
-
+	OSSemCreate(&(SWCountBuffer.flag),"Count Buffer",0,&os_err);
+	//SWCountBuffer.count = 0;
 
 
 }
 
 //SWCountPend – Uses a simple synchronous buffer to signal when the count changes and
 //returns the current count.
-INT32U SWCountPend(INT16U tout, OS_ERR *os_err){
+INT32U SWCountPend(INT16U tout, OS_ERR *ptr_os_err){
+	OSSemPend(&(SWCountBuffer.flag),tout,OS_OPT_PEND_BLOCKING,(CPU_TS *)0,ptr_os_err);
 
 	//return THING
 }
