@@ -1,5 +1,7 @@
 /*****************************************************************************************
-* A simple demo program for uCOS-III.
+* EECE 444 Lab 2
+*
+* Initially was a simple demo program for uCOS-III based on Todd Morton's Programing
 * It tests multitasking, the timer, and task semaphores.
 * This version is written for the K65TWR board, LED8 and LED9.
 * If uCOS is working the green LED should toggle every 100ms and the blue LED
@@ -12,12 +14,23 @@
 * 01/04/2020 Todd Morton
 * Version 2021.2 Edited version for EECE444 Lab 1
 * 01/15/2021 August Byrne
+* * Version 2021.3 Edited version for EECE444 Lab 2
+* 01/29/2021 August Byrne
 *****************************************************************************************/
 #include "app_cfg.h"
 #include "os.h"
 #include "MCUType.h"
 #include "K65TWR_ClkCfg.h"
 #include "K65TWR_GPIO.h"
+#include "LcdLayered.h"
+#include "uCOSKey.h"
+
+/*****************************************************************************************
+* Variable Defines Here
+*****************************************************************************************/
+#define LOWADDR (INT32U) 0x00000000		//low memory address
+#define HIGHADRR (INT32U) 0x001FFFFF		//high memory address
+
 /*****************************************************************************************
 * Allocate task control blocks
 *****************************************************************************************/
@@ -39,6 +52,7 @@ static CPU_STK AppTask2Stk[APP_CFG_TASK2_STK_SIZE];
 static void  AppStartTask(void *p_arg);
 static void  AppTask1(void *p_arg);
 static void  AppTask2(void *p_arg);
+typedef enum {CTRL_COUNT,CTRL_WAIT,CTRL_CLEAR} CNTR_CTRL_STATE;
 
 /*****************************************************************************************
 * main()
@@ -76,7 +90,7 @@ void main(void) {
 * Todd Morton, 01/06/2016
 *****************************************************************************************/
 static void AppStartTask(void *p_arg) {
-
+	INT16U math_val = 0;
     OS_ERR os_err;
 
     (void)p_arg;                        /* Avoid compiler warning for unused variable   */
@@ -90,6 +104,19 @@ static void AppStartTask(void *p_arg) {
     GpioLED8Init();
     GpioLED9Init();
     GpioDBugBitsInit();
+    LcdInit();
+    KeyInit();
+    SWCounterInit();
+
+	//Initial program checksum, which is displayed on the second row of the LCD
+	//LcdCursor(2,1,null,null,null);
+	math_val = CalcChkSum((INT8U *)LOWADDR,(INT8U *)HIGHADRR);
+	LcdDispString(LCD_ROW_2,LCD_COL_1,LCD_LAYER_CHKSM,"CS: ");
+	LcdDispByte(LCD_ROW_2,LCD_COL_1,LCD_LAYER_CHKSM,(INT8U)math_val);
+	LcdDispByte(LCD_ROW_2,LCD_COL_3,LCD_LAYER_CHKSM,(INT8U)(math_val << 8));	//display first byte on LCD column 1 then <<8 and display on column 3
+	//LcdCursor(1,1,null,null,null);
+
+
 
     OSTaskCreate(&AppTask1TCB,                  /* Create Task 1                    */
                 "App Task1 ",
@@ -121,6 +148,41 @@ static void AppStartTask(void *p_arg) {
 
     OSTaskDel((OS_TCB *)0, &os_err);
 }
+
+static void appTimerDisplayTask(void *p_arg){
+
+
+
+}
+
+static void appTimerControlTask(void *p_arg){
+
+	OS_ERR os_err;
+	INT8U kchar;
+	CNTR_CTRL_STATE current_state;
+
+	(void)p_arg;
+
+	while(1){
+	DB3_TURN_OFF();
+	kchar = KeyPend(0, &os_err);
+	if (kchar == "*"){
+		current_state = SWCounterGet();
+		if (current_state == CTRL_CLEAR){
+			SWCounterCntrlSet(1,0);
+		}else if (current_state == CTRL_WAIT){
+			SWCounterCntrlSet(0,1);
+		}else if (current_state == CTRL_COUNT){
+			SWCounterCntrlSet(0,0);
+		}
+	}
+	DB3_TURN_ON();
+
+	}
+
+
+}
+
 
 /*****************************************************************************************
 * TASK #1
