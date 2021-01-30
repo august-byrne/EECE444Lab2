@@ -1,17 +1,10 @@
 /*****************************************************************************************
 * EECE 444 Lab 2
+* This creates a stop watch timer using a uCOS kernel. Pressing the * symbol on the keypad
+* starts, pauses, or clears the timer displayed on the LCD.
 *
-* Initially was a simple demo program for uCOS-III based on Todd Morton's Programming.
+* Base code was a demo program for uCOS-III based on Todd Morton's Programming.
 * It tests multitasking, the timer, and task semaphores.
-* Version 2017.2
-* 01/06/2017, Todd Morton
-* Version 2018.1 First working version for MCUXpresso
-* 12/06/2018 Todd Morton
-* Version 2021.1 First working version for MCUX11.2
-* 01/04/2020 Todd Morton
-* Version 2021.2 Edited version for EECE444 Lab 1
-* 01/15/2021 August Byrne
-* * Version 2021.3 Edited version for EECE444 Lab 2
 * 01/29/2021 August Byrne
 *****************************************************************************************/
 #include "app_cfg.h"
@@ -60,28 +53,28 @@ static void AppTimerControlTask(void *p_arg);
 *****************************************************************************************/
 void main(void) {
 
-    OS_ERR  os_err;
+	OS_ERR  os_err;
 
-    K65TWR_BootClock();
-    CPU_IntDis();               /* Disable all interrupts, OS will enable them  */
+	K65TWR_BootClock();
+	CPU_IntDis();               /* Disable all interrupts, OS will enable them  */
 
-    OSInit(&os_err);                    /* Initialize uC/OS-III                         */
+	OSInit(&os_err);                    /* Initialize uC/OS-III                         */
 
-    OSTaskCreate(&AppTaskStartTCB,                  /* Address of TCB assigned to task */
-                 "Start Task",                      /* Name you want to give the task */
-                 AppStartTask,                      /* Address of the task itself */
-                 (void *) 0,                        /* p_arg is not used so null ptr */
-                 APP_CFG_TASK_START_PRIO,           /* Priority you assign to the task */
-                 &AppTaskStartStk[0],               /* Base address of task�s stack */
-                 (APP_CFG_TASK_START_STK_SIZE/10u), /* Watermark limit for stack growth */
-                 APP_CFG_TASK_START_STK_SIZE,       /* Stack size */
-                 0,                                 /* Size of task message queue */
-                 0,                                 /* Time quanta for round robin */
-                 (void *) 0,                        /* Extension pointer is not used */
-                 (OS_OPT_TASK_NONE), /* Options */
-                 &os_err);                          /* Ptr to error code destination */
+	OSTaskCreate(&AppTaskStartTCB,                  /* Address of TCB assigned to task */
+				 "Start Task",                      /* Name you want to give the task */
+				 AppStartTask,                      /* Address of the task itself */
+				 (void *) 0,                        /* p_arg is not used so null ptr */
+				 APP_CFG_TASK_START_PRIO,           /* Priority you assign to the task */
+				 &AppTaskStartStk[0],               /* Base address of task�s stack */
+				 (APP_CFG_TASK_START_STK_SIZE/10u), /* Watermark limit for stack growth */
+				 APP_CFG_TASK_START_STK_SIZE,       /* Stack size */
+				 0,                                 /* Size of task message queue */
+				 0,                                 /* Time quanta for round robin */
+				 (void *) 0,                        /* Extension pointer is not used */
+				 (OS_OPT_TASK_NONE), /* Options */
+				 &os_err);                          /* Ptr to error code destination */
 
-    OSStart(&os_err);               /*Start multitasking(i.e. give control to uC/OS)    */
+	OSStart(&os_err);               /*Start multitasking(i.e. give control to uC/OS)    */
 }
 
 /*****************************************************************************************
@@ -92,58 +85,54 @@ void main(void) {
 *****************************************************************************************/
 static void AppStartTask(void *p_arg) {
 	INT16U math_val = 0;
-    OS_ERR os_err;
+	OS_ERR os_err;
 
-    (void)p_arg;                        /* Avoid compiler warning for unused variable   */
+	(void)p_arg;                        /* Avoid compiler warning for unused variable   */
 
-    OS_CPU_SysTickInitFreq(SYSTEM_CLOCK);
-    /* Initialize StatTask. This must be called when there is only one task running.
-     * Therefore, any function call that creates a new task must come after this line.
-     * Or, alternatively, you can comment out this line, or remove it. If you do, you
-     * will not have accurate CPU load information                                       */
-//    OSStatTaskCPUUsageInit(&os_err);
-    GpioLED8Init();
-    GpioLED9Init();
-    GpioDBugBitsInit();
-    LcdInit();
-    KeyInit();
-    SWCounterInit();
+	OS_CPU_SysTickInitFreq(SYSTEM_CLOCK);
+	/* Initialize StatTask. This must be called when there is only one task running.
+	 * Therefore, any function call that creates a new task must come after this line.
+	 * Or, alternatively, you can comment out this line, or remove it. If you do, you
+	 * will not have accurate CPU load information                                       */
+	//    OSStatTaskCPUUsageInit(&os_err);
+	GpioDBugBitsInit();
+	LcdInit();
+	KeyInit();
+	SWCounterInit();
 
 	//Initial program checksum, which is displayed on the second row of the LCD
-	//LcdCursor(2,1,null,null,null);
 	math_val = CalcChkSum((INT8U *)LOWADDR,(INT8U *)HIGHADRR);
 	LcdDispString(LCD_ROW_2,LCD_COL_1,LCD_LAYER_CHKSM,"CS: ");
-	LcdDispByte(LCD_ROW_2,LCD_COL_1,LCD_LAYER_CHKSM,(INT8U)math_val);
-	LcdDispByte(LCD_ROW_2,LCD_COL_3,LCD_LAYER_CHKSM,(INT8U)(math_val << 8));	//display first byte on LCD column 1 then <<8 and display on column 3
-	//LcdCursor(1,1,null,null,null);
+	LcdDispByte(LCD_ROW_2,LCD_COL_4,LCD_LAYER_CHKSM,(INT8U)math_val);
+	LcdDispByte(LCD_ROW_2,LCD_COL_6,LCD_LAYER_CHKSM,(INT8U)(math_val << 8));	//display first byte then <<8 and display next byte
 
-    OSTaskCreate(&AppTimerDisplayTaskTCB,                  /* Create Task 1                    */
-                "AppTimerDisplayTask ",
+	OSTaskCreate(&AppTimerDisplayTaskTCB,                  /* Create Task 1                    */
+				"AppTimerDisplayTask ",
 				AppTimerDisplayTask,
-                (void *) 0,
-                APP_CFG_TASK1_PRIO,
-                &AppTimerDisplayTaskStk[0],
-                (APP_CFG_TASK1_STK_SIZE / 10u),
-                APP_CFG_TASK1_STK_SIZE,
-                0,
-                0,
-                (void *) 0,
-                (OS_OPT_TASK_NONE),
-                &os_err);
+				(void *) 0,
+				APP_CFG_TASK1_PRIO,
+				&AppTimerDisplayTaskStk[0],
+				(APP_CFG_TASK1_STK_SIZE / 10u),
+				APP_CFG_TASK1_STK_SIZE,
+				0,
+				0,
+				(void *) 0,
+				(OS_OPT_TASK_NONE),
+				&os_err);
 
-    OSTaskCreate(&AppTimerControlTaskTCB,    /* Create Task 2                    */
-                "AppTimerControlTask ",
+	OSTaskCreate(&AppTimerControlTaskTCB,    /* Create Task 2                    */
+				"AppTimerControlTask ",
 				AppTimerControlTask,
-                (void *) 0,
-                APP_CFG_TASK2_PRIO,
-                &AppTimerControlTaskStk[0],
-                (APP_CFG_TASK2_STK_SIZE / 10u),
-                APP_CFG_TASK2_STK_SIZE,
-                0,
-                0,
-                (void *) 0,
-                (OS_OPT_TASK_NONE),
-                &os_err);
+				(void *) 0,
+				APP_CFG_TASK2_PRIO,
+				&AppTimerControlTaskStk[0],
+				(APP_CFG_TASK2_STK_SIZE / 10u),
+				APP_CFG_TASK2_STK_SIZE,
+				0,
+				0,
+				(void *) 0,
+				(OS_OPT_TASK_NONE),
+				&os_err);
 
     OSTaskDel((OS_TCB *)0, &os_err);
 }
@@ -162,10 +151,10 @@ static void AppTimerDisplayTask(void *p_arg){
 		sec = ((int)ptr_disp_time/1000)%60;
 		milisec = (int)((INT8U) ptr_disp_time);
 		LcdDispByte(LCD_ROW_1,LCD_COL_1,LCD_LAYER_TIMER,min);
-		LcdDispString(LCD_ROW_2,LCD_COL_2,LCD_LAYER_TIMER,":");
-		LcdDispByte(LCD_ROW_2,LCD_COL_3,LCD_LAYER_TIMER,sec);
-		LcdDispString(LCD_ROW_2,LCD_COL_4,LCD_LAYER_TIMER,":");
-		LcdDispByte(LCD_ROW_2,LCD_COL_5,LCD_LAYER_TIMER,milisec);
+		LcdDispString(LCD_ROW_1,LCD_COL_2,LCD_LAYER_TIMER,":");
+		LcdDispByte(LCD_ROW_1,LCD_COL_3,LCD_LAYER_TIMER,sec);
+		LcdDispString(LCD_ROW_1,LCD_COL_4,LCD_LAYER_TIMER,":");
+		LcdDispByte(LCD_ROW_1,LCD_COL_5,LCD_LAYER_TIMER,milisec);
 	}
 
 }

@@ -67,20 +67,19 @@ void SWCounterInit(void){
 	OSMutexCreate(&SWCntrCtrlKey, "Counter Control Key", &os_err);
 	OSSemCreate(&(SWCountBuffer.flag),"Count Buffer",0,&os_err);
 	//SWCountBuffer.count = 0;
-    OSTaskCreate(&SWCounterTaskTCB,                  /* Create Task 1                    */
-                "SWCounterTask ",
+	OSTaskCreate(&SWCounterTaskTCB,                  /* Create Task 1                    */
+				"SWCounterTask ",
 				SWCounterTask,
-                (void *) 0,
+				(void *) 0,
 				APP_CFG_SWCOUNTER_TASK_PRIO,
-                &SWCounterTaskStartStk[0],
-                (APP_CFG_TASK3_STK_SIZE / 10u),
-                APP_CFG_TASK3_STK_SIZE,
-                0,
-                0,
-                (void *) 0,
-                (OS_OPT_TASK_NONE),
-                &os_err);
-
+				&SWCounterTaskStartStk[0],
+				(APP_CFG_TASK3_STK_SIZE / 10u),
+				APP_CFG_TASK3_STK_SIZE,
+				0,
+				0,
+				(void *) 0,
+				(OS_OPT_TASK_NONE),
+				&os_err);
 
 }
 
@@ -100,9 +99,9 @@ void SWCounterTask(void *p_arg){
 	INT32U counter = 0;
 	(void)p_arg;
 	while(1){
-        DB1_TURN_OFF();                             /* Turn off debug bit while waiting */
-    	OSTimeDly(10,OS_OPT_TIME_PERIODIC,&os_err);     /* Task period = 10ms   */
-        DB1_TURN_ON();                          /* Turn on debug bit while ready/running*/
+		DB1_TURN_OFF();                             /* Turn off debug bit while waiting */
+		OSTimeDly(10,OS_OPT_TIME_PERIODIC,&os_err);     /* Task period = 10ms   */
+		DB1_TURN_ON();                          /* Turn on debug bit while ready/running*/
 		counterState = SWCounterGet();
 		switch (counterState){
 			case CTRL_COUNT:
@@ -111,7 +110,6 @@ void SWCounterTask(void *p_arg){
 					counter = 0;
 				}
 				OSSemPend(&(SWCountBuffer.flag),0,OS_OPT_PEND_BLOCKING,(CPU_TS *)0,&os_err);
-				//lstate = SWCntrCntrl;
 				SWCountBuffer.count[0] = counter;
 				OSSemPost(&(SWCountBuffer.flag),OS_OPT_POST_NONE,&os_err);
 				//OSMutexPost(&(SWCountBuffer).flag,OS_OPT_POST_NONE,&os_err);
@@ -122,7 +120,6 @@ void SWCounterTask(void *p_arg){
 			case CTRL_CLEAR:
 				counter = 0;
 				OSSemPend(&(SWCountBuffer.flag),0,OS_OPT_PEND_BLOCKING,(CPU_TS *)0,&os_err);
-				//lstate = SWCntrCntrl;
 				SWCountBuffer.count[0] = counter;
 				OSSemPost(&(SWCountBuffer.flag),OS_OPT_POST_NONE,&os_err);
 			break;
