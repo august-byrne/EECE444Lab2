@@ -1,11 +1,8 @@
 /*****************************************************************************************
 * EECE 444 Lab 2
 *
-* Initially was a simple demo program for uCOS-III based on Todd Morton's Programing
+* Initially was a simple demo program for uCOS-III based on Todd Morton's Programming.
 * It tests multitasking, the timer, and task semaphores.
-* This version is written for the K65TWR board, LED8 and LED9.
-* If uCOS is working the green LED should toggle every 100ms and the blue LED
-* should toggle every 1 second.
 * Version 2017.2
 * 01/06/2017, Todd Morton
 * Version 2018.1 First working version for MCUXpresso
@@ -22,14 +19,19 @@
 #include "MCUType.h"
 #include "K65TWR_ClkCfg.h"
 #include "K65TWR_GPIO.h"
+#include "MemTest.h"
 #include "LcdLayered.h"
 #include "uCOSKey.h"
+#include "SWCounter.h"
 
 /*****************************************************************************************
 * Variable Defines Here
 *****************************************************************************************/
 #define LOWADDR (INT32U) 0x00000000		//low memory address
 #define HIGHADRR (INT32U) 0x001FFFFF		//high memory address
+#define CTRL_COUNT 0
+#define CTRL_WAIT 1
+#define CTRL_CLEAR 2
 
 /*****************************************************************************************
 * Allocate task control blocks
@@ -52,9 +54,6 @@ static CPU_STK AppTimerControlTaskStk[APP_CFG_TASK2_STK_SIZE];
 static void AppStartTask(void *p_arg);
 static void AppTimerDisplayTask(void *p_arg);
 static void AppTimerControlTask(void *p_arg);
-//static void  AppTask1(void *p_arg);
-//static void  AppTask2(void *p_arg);
-typedef enum {CTRL_COUNT,CTRL_WAIT,CTRL_CLEAR} CNTR_CTRL_STATE;
 
 /*****************************************************************************************
 * main()
@@ -158,10 +157,10 @@ static void AppTimerDisplayTask(void *p_arg){
 
 	(void)*p_arg;
 	while(1){
-		ptr_disp_time = SWCountPend(0,&os_err);
-		min = (ptr_disp_time/1000)/60;
-		sec = (ptr_disp_time/1000)%60;
-		milisec = (INT8U) ptr_disp_time;
+		ptr_disp_time = (INT8U *) SWCountPend(0,&os_err);
+		min = ((int)ptr_disp_time/1000)/60;
+		sec = ((int)ptr_disp_time/1000)%60;
+		milisec = (int)((INT8U) ptr_disp_time);
 		LcdDispByte(LCD_ROW_1,LCD_COL_1,LCD_LAYER_TIMER,min);
 		LcdDispString(LCD_ROW_2,LCD_COL_2,LCD_LAYER_TIMER,":");
 		LcdDispByte(LCD_ROW_2,LCD_COL_3,LCD_LAYER_TIMER,sec);
@@ -169,22 +168,18 @@ static void AppTimerDisplayTask(void *p_arg){
 		LcdDispByte(LCD_ROW_2,LCD_COL_5,LCD_LAYER_TIMER,milisec);
 	}
 
-
-
 }
 
 static void AppTimerControlTask(void *p_arg){
-
 	OS_ERR os_err;
 	INT8U kchar;
 	CNTR_CTRL_STATE current_state;
-
 	(void)p_arg;
 
 	while(1){
 	DB3_TURN_OFF();
 	kchar = KeyPend(0, &os_err);
-	if (kchar == "*"){
+	if (kchar == '*'){
 		current_state = SWCounterGet();
 		if (current_state == CTRL_CLEAR){
 			SWCounterCntrlSet(1,0);
@@ -198,56 +193,5 @@ static void AppTimerControlTask(void *p_arg){
 
 	}
 
-
 }
 
-
-/*****************************************************************************************
-* TASK #1
-* Uses OSTimeDelay to signal the Task2 semaphore every second.
-* It also toggles the green LED every 100ms.
-*****************************************************************************************/
-static void AppTask1(void *p_arg){
-
-    INT8U timcntr = 0;                              /* Counter for one second flag      */
-    OS_ERR os_err;
-    (void)p_arg;
-    
-    while(1){
-    
-        DB1_TURN_OFF();                             /* Turn off debug bit while waiting */
-    	OSTimeDly(100,OS_OPT_TIME_PERIODIC,&os_err);     /* Task period = 100ms   */
-        DB1_TURN_ON();                          /* Turn on debug bit while ready/running*/
-        LED8_TOGGLE();                          /* Toggle green LED                     */
-        timcntr++;
-        if(timcntr == 10){                     /* Signal Task2 every second             */
-            (void)OSTaskSemPost(&AppTask2TCB,OS_OPT_POST_NONE,&os_err);
-            timcntr = 0;
-        }else{
-        }
-    }
-}
-
-/*****************************************************************************************
-* TASK #2
-* Pends on its semaphore and toggles the blue LED every second
-*****************************************************************************************/
-static void AppTask2(void *p_arg){
-
-    OS_ERR os_err;
-
-    (void)p_arg;
-
-    while(1) {                                  /* wait for Task 1 to signal semaphore  */
-
-        DB2_TURN_OFF();                         /* Turn off debug bit while waiting     */
-        OSTaskSemPend(0,                        /* No timeout                           */
-                      OS_OPT_PEND_BLOCKING,     /* Block until posted                   */
-                      (void *)0,                /* No timestamp                         */
-                      &os_err);
-        DB2_TURN_ON();                          /* Turn on debug bit while ready/running*/
-        LED9_TOGGLE();;                         /* Toggle blue LED                    */
-    }
-}
-
-/********************************************************************************/
