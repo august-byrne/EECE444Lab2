@@ -1,11 +1,14 @@
 /*****************************************************************************************
 * EECE 444 Lab 2
 * This creates a stop watch timer using a uCOS kernel. Pressing the * symbol on the keypad
-* starts, pauses, or clears the timer displayed on the LCD.
+* starts, pauses, or clears the timer displayed on the LCD. Pressing the # symbol sets the
+* lap function the record the current time on the second row of the LCD.
 *
 * Base code was a demo program for uCOS-III based on Todd Morton's Programming.
 * It tests multitasking, the timer, and task semaphores.
-* 01/29/2021 August Byrne
+* Created On: 01/29/2021
+* Last Edited On: 01/31/2021
+*       Author: August Byrne
 *****************************************************************************************/
 #include "app_cfg.h"
 #include "os.h"
@@ -49,10 +52,15 @@ static void AppTimerDisplayTask(void *p_arg);
 static void AppTimerControlTask(void *p_arg);
 
 /*****************************************************************************************
+ * Mutex & Semaphores
+*****************************************************************************************/
+OS_MUTEX appTimerCntrKey;
+static INT8U appTimerCount[3];  /* accessed through the mutex. contains min, sec, & centisec */
+
+/*****************************************************************************************
 * main()
 *****************************************************************************************/
 void main(void) {
-
 	OS_ERR  os_err;
 
 	K65TWR_BootClock();
@@ -110,7 +118,7 @@ static void AppStartTask(void *p_arg) {
 				"AppTimerDisplayTask ",
 				AppTimerDisplayTask,
 				(void *) 0,
-				APP_CFG_TASK1_PRIO,
+				APP_CFG_TIMER_DISPLAY_TASK_PRIO,
 				&AppTimerDisplayTaskStk[0],
 				(APP_CFG_TASK1_STK_SIZE / 10u),
 				APP_CFG_TASK1_STK_SIZE,
@@ -124,7 +132,7 @@ static void AppStartTask(void *p_arg) {
 				"AppTimerControlTask ",
 				AppTimerControlTask,
 				(void *) 0,
-				APP_CFG_TASK2_PRIO,
+				APP_CFG_TIMER_CONTROL_TASK_PRIO,
 				&AppTimerControlTaskStk[0],
 				(APP_CFG_TASK2_STK_SIZE / 10u),
 				APP_CFG_TASK2_STK_SIZE,
@@ -133,54 +141,61 @@ static void AppStartTask(void *p_arg) {
 				(void *) 0,
 				(OS_OPT_TASK_NONE),
 				&os_err);
-
-    OSTaskDel((OS_TCB *)0, &os_err);
+	OSTaskDel((OS_TCB *)0, &os_err);
 }
 
+//AppTimerDisplayTask
+//This controls how the timer is displayed on the LCD
 static void AppTimerDisplayTask(void *p_arg){
 	OS_ERR os_err;
-	INT8U *ptr_disp_time;
+	INT32U *ptr_disp_time;
 	INT8U min;
 	INT8U sec;
-	INT8U milisec;
+	INT8U centisec;
+	(void)p_arg;
 
-	(void)*p_arg;
 	while(1){
-		ptr_disp_time = (INT8U *) SWCountPend(0,&os_err);
-		min = ((int)ptr_disp_time/1000)/60;
-		sec = ((int)ptr_disp_time/1000)%60;
-		milisec = (int)((INT8U) ptr_disp_time);
-		LcdDispByte(LCD_ROW_1,LCD_COL_1,LCD_LAYER_TIMER,min);
-		LcdDispString(LCD_ROW_1,LCD_COL_2,LCD_LAYER_TIMER,":");
-		LcdDispByte(LCD_ROW_1,LCD_COL_3,LCD_LAYER_TIMER,sec);
-		LcdDispString(LCD_ROW_1,LCD_COL_4,LCD_LAYER_TIMER,":");
-		LcdDispByte(LCD_ROW_1,LCD_COL_5,LCD_LAYER_TIMER,milisec);
-	}
+		ptr_disp_time = SWCountPend(0,&os_err);
+		centisec = ((*ptr_disp_time)%100);
+		sec = ((*ptr_disp_time-centisec)/100)%60;
+		min = ((*ptr_disp_time-centisec)/100-sec)/60;
+		LcdDispTime(LCD_ROW_1,LCD_COL_1,LCD_LAYER_TIMER,min,sec,centisec);
 
+		OSMutexPend(&appTimerCntrKey, 0, OS_OPT_PEND_BLOCKING, (CPU_TS *)0, &os_err);
+		appTimerCount[0] = centisec;
+		appTimerCount[1] = sec;
+		appTimerCount[2] = min;
+		OSMutexPost(&appTimerCntrKey, OS_OPT_POST_NONE, &os_err);
+	}
 }
 
+//AppTimerControlTask
+//This controls the actions that happen when you press a button
+//on the keypad
 static void AppTimerControlTask(void *p_arg){
 	OS_ERR os_err;
-	INT8U kchar;
+	INT8U kchar = 0;
 	CNTR_CTRL_STATE current_state;
 	(void)p_arg;
 
 	while(1){
-	DB3_TURN_OFF();
-	kchar = KeyPend(0, &os_err);
-	if (kchar == '*'){
-		current_state = SWCounterGet();
-		if (current_state == CTRL_CLEAR){
-			SWCounterCntrlSet(1,0);
-		}else if (current_state == CTRL_WAIT){
-			SWCounterCntrlSet(0,1);
-		}else if (current_state == CTRL_COUNT){
-			SWCounterCntrlSet(0,0);
-		}
+		DB3_TURN_OFF();
+		kchar = KeyPend(0, &os_err);
+		if (kchar == '*'){
+			current_state = SWCounterGet();
+			if (current_state == CTRL_CLEAR){
+				SWCounterCntrlSet(1,0);
+			}else if (current_state == CTRL_WAIT){
+				SWCounterCntrlSet(0,1);
+			}else if (current_state == CTRL_COUNT){
+				SWCounterCntrlSet(0,0);
+			}else{}
+		}else if(kchar == '#'){
+			OSMutexPend(&appTimerCntrKey, 0, OS_OPT_PEND_BLOCKING, (CPU_TS *)0, &os_err);
+			LcdDispTime(LCD_ROW_2, LCD_COL_1, LCD_LAYER_LAP,appTimerCount[2],appTimerCount[1],appTimerCount[0]);
+			OSMutexPost(&appTimerCntrKey, OS_OPT_POST_NONE, &os_err);
+		}else{}
+		DB3_TURN_ON();
 	}
-	DB3_TURN_ON();
-
-	}
-
 }
 

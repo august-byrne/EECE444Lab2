@@ -32,10 +32,10 @@
 *************************************************************************/
 #define LCD_NUM_LAYERS 4
 
-#define LCD_LAYER_CHKSM 3
+#define LCD_LAYER_4 3
 #define LCD_LAYER_TIMER 2
 #define LCD_LAYER_LAP 1
-#define SEND_D_LAYER 0
+#define LCD_LAYER_CHKSM 0
 
 /*************************************************************************
 * LCD Rows and Columns Defines

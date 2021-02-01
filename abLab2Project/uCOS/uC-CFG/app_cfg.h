@@ -46,12 +46,14 @@
 *********************************************************************************************************
 */
 
-#define APP_CFG_TASK_START_PRIO     2u
-#define APP_CFG_KEY_TASK_PRIO       4u
-#define APP_CFG_SWCOUNTER_TASK_PRIO 6u
-#define APP_CFG_TASK1_PRIO          7u
-#define APP_CFG_LCD_TASK_PRIO       8u
-#define APP_CFG_TASK2_PRIO          9u
+#define APP_CFG_TASK_START_PRIO               2u        //used by me
+#define APP_CFG_KEY_TASK_PRIO                 6u        //used by uCOSKey.c
+#define APP_CFG_TIMER_DISPLAY_TASK_PRIO       8u       //used to display timer
+#define APP_CFG_LCD_TASK_PRIO                 10u       //used by LcdLayered.c
+#define APP_CFG_SWCOUNTER_TASK_PRIO           12u        //used by the counter
+#define APP_CFG_TIMER_CONTROL_TASK_PRIO       14u       //used by the timer control task
+
+
 
 /*
 *********************************************************************************************************
