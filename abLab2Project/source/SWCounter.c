@@ -2,7 +2,7 @@
  * SWCounter.c
  *  This controls all the counting functionality of the stop watch counter
  *  Created on: Jan 29, 2021
- *  Lasted Edited On: Jan 31 2021
+ *  Lasted Edited On: Mar 15 2021
  *      Author: August Byrne
  */
 #include "app_cfg.h"
@@ -10,6 +10,7 @@
 #include "MCUType.h"
 #include "K65TWR_ClkCfg.h"
 #include "K65TWR_GPIO.h"
+#include "SWCounter.h"
 
 /*****************************************************************************************
 * Variable Defines Here
@@ -18,33 +19,22 @@
 #define ENABLE_OFF 0
 #define RESET_ON 1
 #define RESET_OFF 0
-typedef enum {CTRL_COUNT,CTRL_WAIT,CTRL_CLEAR} CNTR_CTRL_STATE;
 #define MAX_COUNT  600000 /* max count of the counter (99:59:99) */
 /*****************************************************************************************
 * Allocate task control blocks
 *****************************************************************************************/
 static OS_TCB SWCounterTaskTCB;
-//static OS_TCB AppTask1TCB;
-//static OS_TCB AppTask2TCB;
 
 /*****************************************************************************************
 * Allocate task stack space.
 *****************************************************************************************/
 static CPU_STK SWCounterTaskStartStk[APP_CFG_TASK3_STK_SIZE];
-//static CPU_STK AppTask1Stk[APP_CFG_TASK1_STK_SIZE];
-//static CPU_STK AppTask2Stk[APP_CFG_TASK2_STK_SIZE];
 
 /*****************************************************************************************
 * Task Function Prototypes.
 *   - Private if in the same module as startup task. Otherwise public.
 *****************************************************************************************/
-//static void  AppStartTask(void *p_arg);
-void  SWCounterInit(void);
-INT32U *SWCountPend(INT16U tout, OS_ERR *os_err);
-void SWCounterCntrlSet(INT8U enable, INT8U reset);
-void SWCounterSet(CNTR_CTRL_STATE CntrCtrlState);
-CNTR_CTRL_STATE SWCounterGet(void);
-void SWCounterTask(void *p_arg);
+static void SWCounterTask(void *p_arg);
 
 /*****************************************************************************************
  * Mutex & Semaphores
@@ -56,7 +46,7 @@ typedef struct {
 static SW_COUNT_BUFFER SWCountBuffer;
 
 static CNTR_CTRL_STATE SWCntrCntrl;
-OS_MUTEX SWCntrCtrlKey;
+static OS_MUTEX SWCntrCtrlKey;
 
 /*****************************************************************************************
 * SWCounter()
@@ -68,7 +58,9 @@ void SWCounterInit(void){
 
 	OSMutexCreate(&SWCntrCtrlKey, "Counter Control Key", &os_err);
 	OSSemCreate(&(SWCountBuffer.flag),"Count Buffer",0,&os_err);
-	SWCounterSet(CTRL_CLEAR);
+	OSMutexPend(&SWCntrCtrlKey,0,OS_OPT_PEND_BLOCKING,(CPU_TS *)0,&os_err);
+	SWCntrCntrl = CTRL_CLEAR;
+	OSMutexPost(&SWCntrCtrlKey,OS_OPT_POST_NONE,&os_err);
 
 	OSTaskCreate(&SWCounterTaskTCB,                  /* Create Task 1                    */
 				"SWCounterTask ",
@@ -96,17 +88,19 @@ INT32U *SWCountPend(INT16U tout, OS_ERR *ptr_os_err){
 //SWCounterTask
 //This is what controls the active counter. It either counts, waits, or clears
 //depending on the state of counterState
-void SWCounterTask(void *p_arg){
+static void SWCounterTask(void *p_arg){
 	OS_ERR os_err;
 	INT8U counterState;
 	INT32U counter = 0;
 	(void)p_arg;
 
 	while(1){
-		DB1_TURN_OFF();                             /* Turn off debug bit while waiting */
+		DB2_TURN_OFF();                             /* Turn off debug bit while waiting */
 		OSTimeDly(10,OS_OPT_TIME_PERIODIC,&os_err);     /* Task period = 10ms   */
-		DB1_TURN_ON();                          /* Turn on debug bit while ready/running*/
-		counterState = SWCounterGet();
+		DB2_TURN_ON();                          /* Turn on debug bit while ready/running*/
+		OSMutexPend(&SWCntrCtrlKey,0,OS_OPT_PEND_BLOCKING,(CPU_TS *)0,&os_err);
+		counterState = SWCntrCntrl;
+		OSMutexPost(&SWCntrCtrlKey,OS_OPT_POST_NONE,&os_err);
 		switch (counterState){
 			case CTRL_COUNT:
 				counter ++;
@@ -139,35 +133,21 @@ void SWCounterTask(void *p_arg){
 //If enable is 1 and reset is 0, the counter counts
 //If enable is 0 and reset is 0, the counter is held at the current count
 void SWCounterCntrlSet(INT8U enable, INT8U reset){
+	OS_ERR os_err;
+
 	if (reset == RESET_OFF){
 		if(enable == ENABLE_ON){
-			SWCounterSet(CTRL_COUNT);
+			OSMutexPend(&SWCntrCtrlKey,0,OS_OPT_PEND_BLOCKING,(CPU_TS *)0,&os_err);
+			SWCntrCntrl = CTRL_COUNT;
+			OSMutexPost(&SWCntrCtrlKey,OS_OPT_POST_NONE,&os_err);
 		}else if (enable == ENABLE_OFF){
-			SWCounterSet(CTRL_WAIT);
+			OSMutexPend(&SWCntrCtrlKey,0,OS_OPT_PEND_BLOCKING,(CPU_TS *)0,&os_err);
+			SWCntrCntrl = CTRL_WAIT;
+			OSMutexPost(&SWCntrCtrlKey,OS_OPT_POST_NONE,&os_err);
 		}else{}
 	}else if (reset == RESET_ON){
-		SWCounterSet(CTRL_CLEAR);
+		OSMutexPend(&SWCntrCtrlKey,0,OS_OPT_PEND_BLOCKING,(CPU_TS *)0,&os_err);
+		SWCntrCntrl = CTRL_CLEAR;
+		OSMutexPost(&SWCntrCtrlKey,OS_OPT_POST_NONE,&os_err);
 	}else{}
 }
-
-//SWCounterSet
-//This is a setter for SWCntrCntrl, which uses Mutex Pend and Post
-void SWCounterSet(CNTR_CTRL_STATE CntrCtrlState){
-	OS_ERR os_err;
-	OSMutexPend(&SWCntrCtrlKey,0,OS_OPT_PEND_BLOCKING,(CPU_TS *)0,&os_err);
-	SWCntrCntrl = CntrCtrlState;
-	OSMutexPost(&SWCntrCtrlKey,OS_OPT_POST_NONE,&os_err);
-}
-
-//SWCounterGet
-//This is a getter for SWCntrCntrl, which uses Mutex Pend and Post,
-//and returns SWCntrCntrl
-CNTR_CTRL_STATE SWCounterGet(void){
-	OS_ERR os_err;
-	CNTR_CTRL_STATE lstate;
-	OSMutexPend(&SWCntrCtrlKey,0,OS_OPT_PEND_BLOCKING,(CPU_TS *)0,&os_err);
-	lstate = SWCntrCntrl;
-	OSMutexPost(&SWCntrCtrlKey,OS_OPT_POST_NONE,&os_err);
-	return lstate;
-}
-

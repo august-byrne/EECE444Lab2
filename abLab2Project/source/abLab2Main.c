@@ -7,7 +7,7 @@
 * Base code was a demo program for uCOS-III based on Todd Morton's Programming.
 * It tests multitasking, the timer, and task semaphores.
 * Created On: 01/29/2021
-* Last Edited On: 01/31/2021
+* Last Edited On: 03/16/2021
 *       Author: August Byrne
 *****************************************************************************************/
 #include "app_cfg.h"
@@ -25,9 +25,6 @@
 *****************************************************************************************/
 #define LOWADDR (INT32U) 0x00000000		//low memory address
 #define HIGHADRR (INT32U) 0x001FFFFF		//high memory address
-#define CTRL_COUNT 0
-#define CTRL_WAIT 1
-#define CTRL_CLEAR 2
 
 /*****************************************************************************************
 * Allocate task control blocks
@@ -54,7 +51,7 @@ static void AppTimerControlTask(void *p_arg);
 /*****************************************************************************************
  * Mutex & Semaphores
 *****************************************************************************************/
-OS_MUTEX appTimerCntrKey;
+static OS_MUTEX appTimerCntrKey;
 static INT8U appTimerCount[3];  /* accessed through the mutex. contains min, sec, & centisec */
 
 /*****************************************************************************************
@@ -155,7 +152,9 @@ static void AppTimerDisplayTask(void *p_arg){
 	(void)p_arg;
 
 	while(1){
+		DB1_TURN_OFF();
 		ptr_disp_time = SWCountPend(0,&os_err);
+		DB1_TURN_ON();
 		centisec = ((*ptr_disp_time)%100);
 		sec = ((*ptr_disp_time-centisec)/100)%60;
 		min = ((*ptr_disp_time-centisec)/100-sec)/60;
@@ -175,19 +174,22 @@ static void AppTimerDisplayTask(void *p_arg){
 static void AppTimerControlTask(void *p_arg){
 	OS_ERR os_err;
 	INT8U kchar = 0;
-	CNTR_CTRL_STATE current_state;
+	CNTR_CTRL_STATE current_state = CTRL_WAIT;
 	(void)p_arg;
 
 	while(1){
-		DB3_TURN_OFF();
+		DB0_TURN_OFF();
 		kchar = KeyPend(0, &os_err);
+		DB0_TURN_ON();
 		if (kchar == '*'){
-			current_state = SWCounterGet();
 			if (current_state == CTRL_CLEAR){
+				current_state = CTRL_COUNT;
 				SWCounterCntrlSet(1,0);
 			}else if (current_state == CTRL_WAIT){
+				current_state = CTRL_CLEAR;
 				SWCounterCntrlSet(0,1);
 			}else if (current_state == CTRL_COUNT){
+				current_state = CTRL_WAIT;
 				SWCounterCntrlSet(0,0);
 			}else{}
 		}else if(kchar == '#'){
@@ -195,7 +197,6 @@ static void AppTimerControlTask(void *p_arg){
 			LcdDispTime(LCD_ROW_2, LCD_COL_1, LCD_LAYER_LAP,appTimerCount[2],appTimerCount[1],appTimerCount[0]);
 			OSMutexPost(&appTimerCntrKey, OS_OPT_POST_NONE, &os_err);
 		}else{}
-		DB3_TURN_ON();
 	}
 }
 

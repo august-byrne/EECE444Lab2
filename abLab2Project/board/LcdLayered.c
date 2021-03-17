@@ -160,12 +160,10 @@ static void lcdLayeredTask(void *p_arg) {
     (void)p_arg;
     
     while(1) {
-    
         // Wait for an lcd layer to be modified
-    	DB3_TURN_OFF();
+        DB4_TURN_OFF();
         OSTaskSemPend(0,OS_OPT_PEND_BLOCKING,(CPU_TS *)0, &os_err);
-    	DB3_TURN_ON();
-        
+        DB4_TURN_ON();
         lcdFlattenLayers(&lcdBuffer, (LCD_BUFFER *)&lcdLayers);
         lcdWriteBuffer(&lcdBuffer);
     }
